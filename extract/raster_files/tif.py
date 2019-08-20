@@ -9,7 +9,9 @@ def getMetadata(filepath):
   
    data = {}
    datasource = gdal.Open(filepath)
-    
+   print(filepath)
+   print(datasource)
+
    data['xsize'] = datasource.RasterXSize
    data['ysize'] = datasource.RasterYSize
    ulx, uly, llx, lly, lrx, lry, urx, ury = getCoverage(datasource)
