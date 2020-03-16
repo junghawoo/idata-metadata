@@ -10,7 +10,8 @@ from extract import raster, vector
 import solr.request
 import subprocess
 
-RMQ_HOST   = '127.0.0.1'
+RMQ_HOST   = 'rabbitmq'
+RMQ_PORT   = 5672
 RMQ_USER   = 'rabbitmq'
 RMQ_PASS   = 'rabbitmq'
 RMQ_QUEUE  = 'geoedf-all'
@@ -41,33 +42,30 @@ def callback(ch, method, properties, body):
     if data['action'] == 'opened-file':
         for item in data['paths']:
             
+            filename = os.path.normpath(
+                 os.path.join(data['cwd'],path['name'])
+            )
 
+            outdata['oper']     = path['objtype']
+            outdata['filename'] = filename
+            fileext             = os.path.splitext(filename)[1]
 
-        filename = os.path.normpath(os.path.join(
-        filename = os.path.normpath(
-             os.path.join(data['cwd'],path['name'])
-        )
-
-        outdata['oper']     = path['objtype']
-        outdata['filename'] = filename
-        fileext             = os.path.splitext(filename)[1]
-
-        if path['objtype'] == 'CREATE':
-            if fileext in raster.extensions:
-                 metadata = raster.getMetadata(filename) 
-                 print(json.dumps(metadata, indent=3))
-                 solr.request.newFile(metadata)
-            elif fileext in vector.extensions:
-                 metadata = vector.getMetadata(filename)
-                 print("created ", json.dumps(metadata, indent=3))
-                 solr.request.newFile(metadata)
-         
-        if path['objtype'] == 'DELETE':
-            solr.request.deleteFile(filename)
-            print("deleted ",filename)
-           
-        outstr += json.dumps(outdata)
-    
+            if path['objtype'] == 'CREATE':
+                if fileext in raster.extensions:
+                     metadata = raster.getMetadata(filename) 
+                     print(json.dumps(metadata, indent=3))
+                     solr.request.newFile(metadata)
+                elif fileext in vector.extensions:
+                     metadata = vector.getMetadata(filename)
+                     print("created ", json.dumps(metadata, indent=3))
+                     solr.request.newFile(metadata)
+             
+            if path['objtype'] == 'DELETE':
+                solr.request.deleteFile(filename)
+                print("deleted ",filename)
+               
+            outstr += json.dumps(outdata)
+        
 
     print(' [x] Msg:',outstr) # TODO For debug. Remove?
 
@@ -80,20 +78,10 @@ def callback(ch, method, properties, body):
 if __name__ == "__main__":
 
     # Connect to our queue in RabbitMQ
-    connection = pika.BlockingConnection(
-        pika.ConnectionParameters(
-            host        =RMQ_HOST
-            ,credentials=pika.PlainCredentials(
-                RMQ_USER
-                ,RMQ_PASS
-            )
-        )
-    )
+    credentials = pika.PlainCredentials(RMQ_USER, RMQ_PASS)
+    connection = pika.BlockingConnection(pika.ConnectionParameters(RMQ_HOST, RMQ_PORT, "/", credentials))
     channel    = connection.channel()
-    result     = channel.queue_declare(
-        queue=RMQ_QUEUE
-        ,durable=True
-    )
+    result     = channel.queue_declare(queue = RMQ_QUEUE, durable=True)
     
     # Set our callback function, wait for msgs
     channel.basic_qos(prefetch_count=1)
