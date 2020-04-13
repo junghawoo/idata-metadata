@@ -4,12 +4,18 @@ import os
 DUBLIN_CORE = ['title', 'id', 'group', 'contributer', 'subject', 'description', 'source', 'creator', 'publisher', 'format', 'date']
 COMMON_MAPPINGS = {'method': 'source', 'date_created': 'date', 'creator_name': 'creator'}
 
-def cleanData(data, filepath):
+def basicData(filepath):
+    data = {}
+    return commonData(data, filepath)
+
+def commonData(data, filepath):
+
      """Sets default fields, creates coverage envelope, and maps common field names"""
+
 
      basename, ext = os.path.splitext(filepath)
      data['id'] = filepath 
-     
+
      if 'title' not in data or data['title'] is None:
          data['title'] = basename 
 
@@ -20,10 +26,16 @@ def cleanData(data, filepath):
      if 'url' not in data or data['url'] is None:
              data['url'] = 'http://129.114.16.188'
 
-     # TODO: remove
+     # TODO: what should this be?
      if 'access_level' not in data or data['access_level'] is None:
           data['access_level'] = 'public'
-    
+
+     return data
+
+def geoData(data,filepath):
+
+     data = commonData(data, filepath)
+
      # if key exists and is not None, add it to coverage dictionary
      # always delete the entry from 'data' dictionary if it is present
      coverage = {}

@@ -2,16 +2,15 @@
 # Pop msg off queue, extract metadata, send to Solr 
 
 from __future__ import print_function
-import sys, os
+import sys, os, time
 import json
 import pika
 import sys, os
-from extract import raster, vector
+from extract import raster, vector, common
 import solr.request
 import subprocess
 
-RMQ_HOST   = 'rabbitmq'
-RMQ_PORT   = 5672
+RMQ_HOST   = '127.0.0.1'
 RMQ_USER   = 'rabbitmq'
 RMQ_PASS   = 'rabbitmq'
 RMQ_QUEUE  = 'geoedf-all'
@@ -26,65 +25,63 @@ SHAPE_KEY  = 'shape'
 def callback(ch, method, properties, body):
     '''React to message on queue'''
 
-    msgfile = open(LOG_PATH,'a')
-    msgfile.write(" [x] Received %r" % body)
+    # binary message to string
+    body = body.decode()
+    # string to json
+    data = json.loads(body)
+    # print for debug
+    print(json.dumps(data, indent=3))
 
-    data    = json.loads(body)
-    outdata = {}
-    outstr  = ''
-    key     = UNSPEC_KEY
- 
-    for item  in data['paths']: 
+    # index by item number
+    paths = {}
+    for item in data['paths']: 
         paths[int(item['item'])] = item['name']
 
-
-
-    if data['action'] == 'opened-file':
-        for item in data['paths']:
-            
-            filename = os.path.normpath(
-                 os.path.join(data['cwd'],path['name'])
-            )
-
-            outdata['oper']     = path['objtype']
-            outdata['filename'] = filename
-            fileext             = os.path.splitext(filename)[1]
-
-            if path['objtype'] == 'CREATE':
-                if fileext in raster.extensions:
-                     metadata = raster.getMetadata(filename) 
-                     print(json.dumps(metadata, indent=3))
-                     solr.request.newFile(metadata)
-                elif fileext in vector.extensions:
-                     metadata = vector.getMetadata(filename)
-                     print("created ", json.dumps(metadata, indent=3))
-                     solr.request.newFile(metadata)
-             
-            if path['objtype'] == 'DELETE':
-                solr.request.deleteFile(filename)
-                print("deleted ",filename)
-               
-            outstr += json.dumps(outdata)
+    if data['action'] == 'rename':
+        print('action: rename...')
+        source = os.path.join(paths[0], paths[2])
+        destination = os.path.join(paths[1], paths[3])
+        solr.request.renameFile(source, destination)
+        print(source, " renamed to ", destination)
+    elif data['action'] == 'opened-file':
+        print('action: opened-file...')
+        filename = os.path.normpath(os.path.join(data['cwd'],paths[0]))
+        fileext = os.path.splitext(paths[0])[1]
+        while(os.path.isfile(filename) is not True):
+            time.sleep(2)
+        if fileext in raster.extensions:
+            metadata = raster.getMetadata(filename) 
+            print("new file indexed to solr: ", json.dumps(metadata, indent=3))
+            solr.request.newFile(metadata)
+        elif fileext in vector.extensions:
+            metadata = vector.getMetadata(filename)
+            print("new file indexed to solr:  ", json.dumps(metadata, indent=3))
+            solr.request.newFile(metadata)
+        else:
+            metadata = common.basicData(filename)
+            solr.request.newFile(metadata)
+            print("new file indexed to solr: ", json.dumps(metadata, indent=3))
+    elif data['action'] == 'deleted':
+        print("action: deleted...")
+        filename = os.path.normpath(os.path.join(paths[0] ,paths[1]))
+        solr.request.deleteFile(filename)
+        print(filename, " deleted from solr")
         
-
-    print(' [x] Msg:',outstr) # TODO For debug. Remove?
-
-    # TODO Send metadata to Solr
-
-    msgfile.write(" [x] Done")
-    msgfile.close()
-    ch.basic_ack(delivery_tag=method.delivery_tag)
 
 if __name__ == "__main__":
 
     # Connect to our queue in RabbitMQ
     credentials = pika.PlainCredentials(RMQ_USER, RMQ_PASS)
-    connection = pika.BlockingConnection(pika.ConnectionParameters(RMQ_HOST, RMQ_PORT, "/", credentials))
+    connection = pika.BlockingConnection(pika.ConnectionParameters(host=RMQ_HOST, credentials=credentials))
     channel    = connection.channel()
-    result     = channel.queue_declare(queue = RMQ_QUEUE, durable=True)
+    result     = channel.queue_declare(RMQ_QUEUE, durable=True)
+
+    # Create exchange to distribute messages
+    # channel.exchange_declare(exchange, exchange_type='direct')
+    
     
     # Set our callback function, wait for msgs
     channel.basic_qos(prefetch_count=1)
-    channel.basic_consume(result.method.queue, callback)
-    channel.start_consuming()
+    channel.basic_consume(result.method.queue, callback, auto_ack=True)
     print(' [*] Waiting for messages. To exit press CTRL+C')
+    channel.start_consuming()

@@ -1,6 +1,6 @@
 from pyproj import Proj, transform
 from osgeo import ogr
-from .common import cleanData
+from .common import commonData
 from .vector_files import gml
 from .vector_files import kml
 from .vector_files import shp
@@ -55,4 +55,4 @@ def getMetadata(filepath):
      if schema is not None:
          data['schema'] = schema
 
-     return cleanData(data, filepath) 
+     return commonData(data, filepath) 

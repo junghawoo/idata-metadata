@@ -2,7 +2,7 @@ import sys, requests, json, os
 import xml.etree.ElementTree as ET	
 import xml.dom.minidom as minidom
 
-SOLR_CORE_URL = 'http://129.114.16.188:8445/solr/hubzero-solr-core'
+SOLR_CORE_URL = 'http://localhost:8445/solr/hubzero-solr-core'
 
 # all strings except for title should be interpretted as text_general (*_t) or multivalue text_general (*_txt)
 DYNAMIC = { str: '_t',  int: '_i', float: '_f'} 
@@ -51,8 +51,10 @@ def deleteFile(filename):
 def renameFile(oldname, newname):
 
     request_str = SOLR_CORE_URL + '/get?id=' + oldname
+    print(request_str)
     r = requests.get(request_str)
     doc_dict = r.json()['doc']
+    print(doc_dict)
     for field in ('_version_', 'timestamp'):
        if field in doc_dict:
           doc_dict.pop(field)

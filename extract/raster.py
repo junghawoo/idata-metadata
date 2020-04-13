@@ -4,7 +4,7 @@ from .raster_files import hdf4
 from .raster_files import hdf5
 from .raster_files import nc
 from .raster_files import tif
-from .common import cleanData
+from .common import commonData
 import os
 
 extensions = ['.hdf4', '.hdf', '.hdf5', '.nc', '.tif']
@@ -56,4 +56,4 @@ def getMetadata(filepath):
      data['latmax'] = max(longitudes)
      data['lonmin'] = min(latitudes)
      data['lonmax'] = max(latitudes)
-     return cleanData(data, filepath) 
+     return commonData(data, filepath) 

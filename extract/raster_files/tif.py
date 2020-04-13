@@ -12,8 +12,10 @@ def getMetadata(filepath):
    print(filepath)
    print(datasource)
 
-   data['xsize'] = datasource.RasterXSize
-   data['ysize'] = datasource.RasterYSize
+   if datasource.RasterXSize is not None:
+       data['xsize'] = datasource.RasterXSize
+   if datasource.RasterYSize is not None:
+       data['ysize'] = datasource.RasterYSize
    ulx, uly, llx, lly, lrx, lry, urx, ury = getCoverage(datasource)
    latitudes = [ulx, llx, lrx, urx]
    longitudes = [uly, lly, lry, ury] 
