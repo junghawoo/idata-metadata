@@ -12,6 +12,7 @@ def commonData(data, filepath):
 
      """Sets default fields, creates coverage envelope, and maps common field names"""
 
+     data['hubtype'] = 'irods-file'
 
      basename, ext = os.path.splitext(filepath)
      data['id'] = filepath 

@@ -1,6 +1,7 @@
-#!/bin/bash
+#!/bin/sh
 
-conda activate env
-PATH=/opt/conda/envs/env/bin:$PATH
-echo $PATH
-python processfile.py
+. /opt/conda/bin/activate 
+conda activate geoedf
+
+export PATH=/opt/conda/envs/geoedf/bin:$PATH
+python3 processfile.py

@@ -2,7 +2,7 @@ import sys, requests, json, os
 import xml.etree.ElementTree as ET	
 import xml.dom.minidom as minidom
 
-SOLR_CORE_URL = 'http://localhost:8445/solr/hubzero-solr-core'
+SOLR_CORE_URL = str(os.getenv('SOLR_URL'))
 
 # all strings except for title should be interpretted as text_general (*_t) or multivalue text_general (*_txt)
 DYNAMIC = { str: '_t',  int: '_i', float: '_f'} 
@@ -95,7 +95,8 @@ def __post_request(xml_byte_string):
     r = requests.post(SOLR_CORE_URL + "/update", data=xml_byte_string, headers=headers, params=params) 
 
     # debug: remove me
-    #print(r.text)
+    with open("/tmp/messages.txt","a+") as logfile:
+        logfile.write(r.text)
 
     # throw an error if indexing was unsuccessful
     r.raise_for_status()
