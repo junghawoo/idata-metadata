@@ -9,6 +9,8 @@ import os
 
 extensions = ['.hdf4', '.hdf', '.hdf5', '.nc', '.tif']
 
+LOG_PATH = '/tmp/messages.txt'
+
 #--------------- for datasource file ------------------#
 def getCoverage(datasource):
      upx, xres, xskew, upy, yskew, yres = datasource.GetGeoTransform()
@@ -30,7 +32,10 @@ def getCoverage(datasource):
      return ulx, uly, llx, lly, lrx, lry, urx, ury
 
 def getMetadata(filepath):
-   
+    
+     with open(LOG_PATH,'a+') as logfile:
+         logfile.write('extract raster metadata for file %s' % filepath)
+     
      data = {}
      filename, ext = os.path.splitext(filepath)
      if (ext == '.hdf4' or  ext == '.hdf'):
@@ -43,6 +48,10 @@ def getMetadata(filepath):
          data = tif.getMetadata(filepath)
      
      datasource = gdal.Open(filepath)
+
+     with open(LOG_PATH,'a+') as logfile:
+         logfile.write('opened raster file successfully')
+
      data['xsize'] = datasource.RasterXSize
      data['ysize'] = datasource.RasterYSize
      ulx, uly, llx, lly, lrx, lry, urx, ury = getCoverage(datasource)
@@ -56,4 +65,8 @@ def getMetadata(filepath):
      data['latmax'] = max(longitudes)
      data['lonmin'] = min(latitudes)
      data['lonmax'] = max(latitudes)
+
+     # file type
+     data['type'] = 'geospatial'
+
      return commonData(data, filepath) 

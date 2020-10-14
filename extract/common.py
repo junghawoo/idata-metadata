@@ -1,7 +1,7 @@
 import os
 
 
-DUBLIN_CORE = ['title', 'id', 'group', 'contributer', 'subject', 'description', 'source', 'creator', 'publisher', 'format', 'date']
+DUBLIN_CORE = ['title', 'id', 'group', 'contributer', 'subject', 'description', 'source', 'creator', 'publisher', 'format', 'date','owner','owner_type','type','language']
 COMMON_MAPPINGS = {'method': 'source', 'date_created': 'date', 'creator_name': 'creator'}
 
 def basicData(filepath):
@@ -22,6 +22,21 @@ def commonData(data, filepath):
 
      if 'language' not in data: 
          data['language'] =  ext
+
+     if 'format' not in data:
+         data['format'] = ext
+
+     if 'type' not in data:
+         data['type'] = 'regular'
+
+     data['owner_type'] = 'project'
+
+     # determine project
+     if filepath.startswith("/srv/idata/"):
+         respath = filepath.split('/srv/idata/',1)[1]
+         proj = respath.split('/',1)[0]
+         data['group'] = proj
+         data['owner'] = proj
 
      # make sure there is a url because the site breaks if there isn't one
      if 'url' not in data or data['url'] is None:

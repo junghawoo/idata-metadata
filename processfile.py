@@ -8,6 +8,7 @@ import pika
 import sys, os
 from extract import raster, vector, common
 import solr.request
+import preview.registerlayer
 import subprocess
 
 RMQ_HOST   = str(os.getenv('RMQ_HOST',"rabbitmq"))
@@ -37,6 +38,8 @@ def requeue_message(ch, body):
 def callback(ch, method, properties, body):
     '''React to message on queue'''
 
+    requeued = False
+
     try:
         # binary message to string
         body = body.decode()
@@ -45,6 +48,12 @@ def callback(ch, method, properties, body):
         # print for debug
         with open(LOG_PATH,'a+') as logfile:
             logfile.write(json.dumps(data, indent=3))
+
+        # determine if message is from CMS or AuditBeat
+        cms_file = False
+
+        if 'actor' in data:
+            cms_file = True
 
         # index by item number
         paths = {}
@@ -63,6 +72,7 @@ def callback(ch, method, properties, body):
                 except:
                     # exception occurred when sending Solr request
                     # requeue for trying later
+                    requeued = True
                     requeue_message(ch,body)
                     with open(LOG_PATH,'a+') as logfile:
                         logfile.write('requeued message')
@@ -71,11 +81,14 @@ def callback(ch, method, properties, body):
         elif data['action'] == 'opened-file':
             with open(LOG_PATH,'a+') as logfile:
                 logfile.write('action: opened-file...\n')
-            filename = os.path.normpath(paths[1]) #os.path.join(data['cwd'],paths[0]))
+            if cms_file:
+                filename = os.path.normpath(os.path.join(data['cwd'],paths[0]))
+            else:
+                filename = os.path.normpath(paths[1])
             # if this is no longer a valid file, skip
             # possibly out of date message that was requeued
             if os.path.isfile(filename):
-                fileext = os.path.splitext(os.path.split(paths[1])[1])[1]
+                fileext = os.path.splitext(os.path.split(filename)[1])[1]
                 with open(LOG_PATH,'a+') as logfile:
                     logfile.write('process file %s' % filename)
                 # extract metadata based on filetype
@@ -83,23 +96,47 @@ def callback(ch, method, properties, body):
                 # a basic dictionary will be returned in the worst case
                 if fileext in raster.extensions:
                     metadata = raster.getMetadata(filename) 
+                    with open(LOG_PATH,'a+') as logfile:
+                        logfile.write('extracted metadata: %s' % metadata)
+                    # register file for preview
+                    with open(LOG_PATH,'a+') as logfile:
+                        logfile.write('registering file for preview')
+                    preview.registerlayer.update_qgs(filename)
                 elif fileext in vector.extensions:
-                    metadata = vector.getMetadata(filename)
+                    # if this is a shapefile and not all supporting files present,
+                    # then requeue the message to wait until all files available
+                    if fileext == '.shp':
+                        if vector.shapefileComplete(filename):
+                            metadata = vector.getMetadata(filename)
+                            # register file for preview
+                            preview.registerlayer.update_qgs(filename)
+                        else:
+                            # requeue message
+                            requeued = True
+                            requeue_message(ch,body)
                 else:
                     metadata = common.basicData(filename)
-                # index to Solr
+                # index to Solr, unless requeuing
                 try:
-                    solr.request.newFile(metadata)
-                    with open(LOG_PATH,'a+') as logfile:
-                        logfile.write("new file indexed to solr: %s" % json.dumps(metadata, indent=3))
+                    if not requeued:
+                        # add the actor if known
+                        if cms_file:
+                            metadata['actor'] = data['actor']
+                        solr.request.newFile(metadata)
+                        with open(LOG_PATH,'a+') as logfile:
+                            logfile.write("new file indexed to solr: %s" % json.dumps(metadata, indent=3))
                 except:
+                    requeued = True
                     requeue_message(ch,body)
                     with open(LOG_PATH,'a+') as logfile:
                         logfile.write('requeued message')
         elif data['action'] == 'deleted':
             with open(LOG_PATH,'a+') as logfile:
                 logfile.write("action: deleted...")
-            filename = os.path.normpath(path[1]) #os.path.join(paths[0] ,paths[1]))
+            if cms_file:
+                filename = os.path.normpath(os.path.join(paths[0],paths[1]))
+            else:
+                filename = os.path.normpath(path[1])
             # ensure file still does not exist
             if not os.path.isfile(filename):
                 try:
@@ -107,6 +144,7 @@ def callback(ch, method, properties, body):
                     with open(LOG_PATH,'a+') as logfile:
                         logfile.write("%s deleted from solr" % filename)
                 except:
+                    requeued = True
                     requeue_message(ch,body)
                     with open(LOG_PATH,'a+') as logfile:
                         logfile.write("requeued message")

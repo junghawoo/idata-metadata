@@ -29,6 +29,11 @@ def newFile(data):
                         __add_element(doc, subfield, subvalue, subname) 
             else:
                 __add_element(doc, fieldname, value) 
+    # set the publisher/creator
+    if 'publisher' not in data:
+        __add_element(doc,'publisher',data['actor'])
+    if 'creator' not in data:
+        __add_element(doc,'creator',data['actor'])
                 
     # generate binary string containing xml data 
     xml_byte_string = ET.tostring(root, encoding='utf-8')
