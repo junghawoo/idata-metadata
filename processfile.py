@@ -60,7 +60,7 @@ def callback(ch, method, properties, body):
         for item in data['paths']: 
             paths[int(item['item'])] = item['name']
 
-        if data['action'] == 'rename':
+        if data['action'] == 'rename' or data['action'] == 'renamed':
             with open(LOG_PATH,'a+') as logfile:
                 logfile.write('action: rename...\n')
             source = os.path.join(paths[0], paths[2])

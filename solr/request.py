@@ -55,17 +55,47 @@ def deleteFile(filename):
 
 def renameFile(oldname, newname):
 
+    LOG_PATH = '/tmp/messages.txt'
+
     request_str = SOLR_CORE_URL + '/get?id=' + oldname
-    print(request_str)
+    with open(LOG_PATH,'a+') as logfile:
+        logfile.write('fetching old metadata %s' % request_str)
     r = requests.get(request_str)
     doc_dict = r.json()['doc']
-    print(doc_dict)
+    with open(LOG_PATH,'a+') as logfile:
+        logfile.write('metadata dictionary %s' % doc_dict)
     for field in ('_version_', 'timestamp'):
        if field in doc_dict:
           doc_dict.pop(field)
     doc_dict['id'] = newname
+    # update the title
+    #basename, ext = os.path.splitext(newname)
+    dirname,new_name = os.path.split(newname)
+    if 'title' in doc_dict:
+        #old_basename, ext = os.path.splitext(oldname)
+        dirname,old_name = os.path.split(oldname)
+        # first extract title from the array
+        title_val = doc_dict['title'][0]
+        # assume it has only one value in the array and extract the string
+        #title_val = title_val[2:len(title_val)-2]
+        if title_val == old_name:
+            doc_dict['title'] = new_name
+        else:
+            doc_dict['title'] = title_val
+    else:
+        doc_dict['title'] = new_name
+
+    #set owner again since value returned is an array
+    if 'owner' in doc_dict:
+        owner_val = doc_dict['owner'][0]
+        doc_dict['owner'] = owner_val
+         
+    with open(LOG_PATH,'a+') as logfile:
+        logfile.write('deleting old file %s' % oldname)
     deleteFile(oldname)
     newFile(doc_dict)
+    with open(LOG_PATH,'a+') as logfile:
+        logfile.write('registered new file %s' % doc_dict['id'])
 
 def __add_element(doc, fieldname, value, subname=None):
     

@@ -1,5 +1,5 @@
 #from pyproj import Proj, transform
-from osgeo import gdal
+from osgeo import gdal,osr
 from .raster_files import hdf4
 from .raster_files import hdf5
 from .raster_files import nc
@@ -55,6 +55,16 @@ def getMetadata(filepath):
      data['xsize'] = datasource.RasterXSize
      data['ysize'] = datasource.RasterYSize
      ulx, uly, llx, lly, lrx, lry, urx, ury = getCoverage(datasource)
+     # get projection info
+     try:
+         spatia<t_k> = osr.SpatialReference()
+         spatialRef.ImportFromWkt(datasource.GetProjectionRef())
+         targetSR = osr.SpatialReference()
+         targetSR.ImportFromEPSG(4326)
+         coordTrans = osr.CoordinateTransformation(sourceSR,targetSR)
+     except:
+         with open(LOG_PATH,'a+') as logfile:
+             logfile.write('could not get raster projection, assuming WGS84')
      latitudes = [ulx, llx, lrx, urx]
      longitudes = [uly, lly, lry, ury] 
      data['northlimit'] = uly

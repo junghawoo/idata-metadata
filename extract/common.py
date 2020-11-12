@@ -12,13 +12,15 @@ def commonData(data, filepath):
 
      """Sets default fields, creates coverage envelope, and maps common field names"""
 
-     data['hubtype'] = 'irods-file'
+     data['hubtype'] = 'idata-file'
 
-     basename, ext = os.path.splitext(filepath)
+     #basename, ext = os.path.splitext(filepath)
+     dirname,filename = os.path.split(filepath)
      data['id'] = filepath 
+     data['identifier'] = filepath
 
      if 'title' not in data or data['title'] is None:
-         data['title'] = basename 
+         data['title'] = filename
 
      if 'language' not in data: 
          data['language'] =  ext
