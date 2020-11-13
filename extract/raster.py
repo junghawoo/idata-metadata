@@ -1,10 +1,11 @@
 #from pyproj import Proj, transform
-from osgeo import gdal,osr
+from osgeo import gdal,osr,ogr
 from .raster_files import hdf4
 from .raster_files import hdf5
 from .raster_files import nc
 from .raster_files import tif
 from .common import commonData
+from .common import geoData
 import os
 
 extensions = ['.hdf4', '.hdf', '.hdf5', '.nc', '.tif']
@@ -33,9 +34,6 @@ def getCoverage(datasource):
 
 def getMetadata(filepath):
     
-     with open(LOG_PATH,'a+') as logfile:
-         logfile.write('extract raster metadata for file %s' % filepath)
-     
      data = {}
      filename, ext = os.path.splitext(filepath)
      if (ext == '.hdf4' or  ext == '.hdf'):
@@ -49,24 +47,36 @@ def getMetadata(filepath):
      
      datasource = gdal.Open(filepath)
 
-     with open(LOG_PATH,'a+') as logfile:
-         logfile.write('opened raster file successfully')
-
      data['xsize'] = datasource.RasterXSize
      data['ysize'] = datasource.RasterYSize
      ulx, uly, llx, lly, lrx, lry, urx, ury = getCoverage(datasource)
      # get projection info
      try:
-         spatia<t_k> = osr.SpatialReference()
-         spatialRef.ImportFromWkt(datasource.GetProjectionRef())
+         sourceSR = osr.SpatialReference()
+         sourceSR.ImportFromWkt(datasource.GetProjectionRef())
          targetSR = osr.SpatialReference()
          targetSR.ImportFromEPSG(4326)
          coordTrans = osr.CoordinateTransformation(sourceSR,targetSR)
+
+         ul = ogr.CreateGeometryFromWkt("POINT (%f %f)" % (ulx,uly))
+         ll = ogr.CreateGeometryFromWkt("POINT (%f %f)" % (llx,lly))
+         ur = ogr.CreateGeometryFromWkt("POINT (%f %f)" % (urx,ury))
+         lr = ogr.CreateGeometryFromWkt("POINT (%f %f)" % (lrx,lry))
+
+         ul.Transform(coordTrans)
+         ll.Transform(coordTrans)
+         ur.Transform(coordTrans)
+         lr.Transform(coordTrans)
+
+         longitudes = [ul.GetX(),ll.GetX(),lr.GetX(),ur.GetX()]
+         latitudes = [ul.GetY(),ll.GetY(),lr.GetY(),ur.GetY()]
+
      except:
          with open(LOG_PATH,'a+') as logfile:
              logfile.write('could not get raster projection, assuming WGS84')
-     latitudes = [ulx, llx, lrx, urx]
-     longitudes = [uly, lly, lry, ury] 
+         latitudes = [ulx, llx, lrx, urx]
+         longitudes = [uly, lly, lry, ury] 
+
      data['northlimit'] = uly
      data['southlimit'] = lly
      data['eastlimit'] = urx
@@ -79,4 +89,5 @@ def getMetadata(filepath):
      # file type
      data['type'] = 'geospatial'
 
-     return commonData(data, filepath) 
+     #return commonData(data, filepath) 
+     return geoData(data, filepath) 

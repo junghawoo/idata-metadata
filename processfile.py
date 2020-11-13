@@ -46,8 +46,6 @@ def callback(ch, method, properties, body):
         # string to json
         data = json.loads(body)
         # print for debug
-        with open(LOG_PATH,'a+') as logfile:
-            logfile.write(json.dumps(data, indent=3))
 
         # determine if message is from CMS or AuditBeat
         cms_file = False
@@ -76,11 +74,7 @@ def callback(ch, method, properties, body):
                     requeue_message(ch,body)
                     with open(LOG_PATH,'a+') as logfile:
                         logfile.write('requeued message')
-            with open(LOG_PATH,'a+') as logfile:
-                logfile.write("%s renamed to %s" % (source,destination))
         elif data['action'] == 'opened-file':
-            with open(LOG_PATH,'a+') as logfile:
-                logfile.write('action: opened-file...\n')
             if cms_file:
                 filename = os.path.normpath(os.path.join(data['cwd'],paths[0]))
             else:
@@ -89,18 +83,12 @@ def callback(ch, method, properties, body):
             # possibly out of date message that was requeued
             if os.path.isfile(filename):
                 fileext = os.path.splitext(os.path.split(filename)[1])[1]
-                with open(LOG_PATH,'a+') as logfile:
-                    logfile.write('process file %s' % filename)
                 # extract metadata based on filetype
                 # assume that metadata extractor will not raise an exception
                 # a basic dictionary will be returned in the worst case
                 if fileext in raster.extensions:
                     metadata = raster.getMetadata(filename) 
-                    with open(LOG_PATH,'a+') as logfile:
-                        logfile.write('extracted metadata: %s' % metadata)
                     # register file for preview
-                    with open(LOG_PATH,'a+') as logfile:
-                        logfile.write('registering file for preview')
                     preview.registerlayer.update_qgs(filename)
                 elif fileext in vector.extensions:
                     # if this is a shapefile and not all supporting files present,
@@ -123,16 +111,12 @@ def callback(ch, method, properties, body):
                         if cms_file:
                             metadata['actor'] = data['actor']
                         solr.request.newFile(metadata)
-                        with open(LOG_PATH,'a+') as logfile:
-                            logfile.write("new file indexed to solr: %s" % json.dumps(metadata, indent=3))
                 except:
                     requeued = True
                     requeue_message(ch,body)
                     with open(LOG_PATH,'a+') as logfile:
                         logfile.write('requeued message')
         elif data['action'] == 'deleted':
-            with open(LOG_PATH,'a+') as logfile:
-                logfile.write("action: deleted...")
             if cms_file:
                 filename = os.path.normpath(os.path.join(paths[0],paths[1]))
             else:
@@ -141,8 +125,6 @@ def callback(ch, method, properties, body):
             if not os.path.isfile(filename):
                 try:
                     solr.request.deleteFile(filename)
-                    with open(LOG_PATH,'a+') as logfile:
-                        logfile.write("%s deleted from solr" % filename)
                 except:
                     requeued = True
                     requeue_message(ch,body)

@@ -1,6 +1,7 @@
 from pyproj import Proj, transform
 from osgeo import ogr
 from .common import commonData
+from .common import geoData
 from .vector_files import gml
 from .vector_files import kml
 from .vector_files import shp
@@ -62,4 +63,5 @@ def getMetadata(filepath):
      # file type
      data['type'] = 'geospatial'
 
-     return commonData(data, filepath) 
+     #return commonData(data, filepath) 
+     return geoData(data, filepath) 

@@ -14,7 +14,7 @@ def commonData(data, filepath):
 
      data['hubtype'] = 'idata-file'
 
-     #basename, ext = os.path.splitext(filepath)
+     basename, ext = os.path.splitext(filepath)
      dirname,filename = os.path.split(filepath)
      data['id'] = filepath 
      data['identifier'] = filepath

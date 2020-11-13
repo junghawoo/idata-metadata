@@ -11,29 +11,17 @@ def getMetadata(filepath):
   
    data = {}
 
-   with open(LOG_PATH,'a+') as logfile:
-       logfile.write('get tif metadata for file %s' % filepath)
-
    datasource = gdal.Open(filepath)
 
-   with open(LOG_PATH,'a+') as logfile:
-       logfile.write('opened tif file successfully')
-
    try:
-       with open(LOG_PATH,'a+') as logfile:
-           logfile.write('get xy size of raster %d' % datasource.RasterXSize)
        if datasource.RasterXSize is not None:
            data['xsize'] = datasource.RasterXSize
-       with open(LOG_PATH,'a+') as logfile:
-           logfile.write('got x size of raster')
        if datasource.RasterYSize is not None:
            data['ysize'] = datasource.RasterYSize
-       with open(LOG_PATH,'a+') as logfile:
-           logfile.write('got xy size of raster')
        ulx, uly, llx, lly, lrx, lry, urx, ury = getCoverage(datasource)
-   except e:
+   except:
        with open(LOG_PATH,'a+') as logfile:
-           logfile.write('exception occurred %s' % str(e))
+           logfile.write('exception occurred getting metadata for tif file')
    latitudes = [ulx, llx, lrx, urx]
    longitudes = [uly, lly, lry, ury] 
    data['northlimit'] = uly
@@ -44,9 +32,6 @@ def getMetadata(filepath):
    data['latmax'] = max(longitudes)
    data['lonmin'] = min(latitudes)
    data['lonmax'] = max(latitudes)
-
-   with open(LOG_PATH,'a+') as logfile:
-       logfile.write('fetched extents')
 
    # geotif-related metadata
    metadata = datasource.GetMetadata()
@@ -61,9 +46,6 @@ def getMetadata(filepath):
           data['source'] = metadata.pop('TIFFTAG_SOFTWARE')
        if 'TIFFTAG_ARTIST' in metadata:
           data['creator'] = metadata.pop('TIFFTAG_ARTIST')
-
-   with open(LOG_PATH,'a+') as logfile:
-       logfile.write('fetched other metadata')
 
    # get subdata, which in the case of a GeoTiff file could be the color interpretation of each band
    subdata = {}
@@ -92,11 +74,7 @@ def getMetadata(filepath):
    return data
 
 def getCoverage(datasource):
-     with open(LOG_PATH,'a+') as logfile:
-         logfile.write('get coverage for tif file')
      upx, xres, xskew, upy, yskew, yres = datasource.GetGeoTransform()
-     with open(LOG_PATH,'a+') as logfile:
-         logfile.write('got geotransform')
      cols = datasource.RasterXSize
      rows = datasource.RasterYSize
           
@@ -111,9 +89,6 @@ def getCoverage(datasource):
           
      urx = upx + cols*xres + 0*xskew
      ury = upy + cols*yskew + 0*yres
-
-     with open(LOG_PATH,'a+') as logfile:
-         logfile.write('returning coverage')
 
      return ulx, uly, llx, lly, lrx, lry, urx, ury
 

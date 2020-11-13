@@ -58,12 +58,8 @@ def renameFile(oldname, newname):
     LOG_PATH = '/tmp/messages.txt'
 
     request_str = SOLR_CORE_URL + '/get?id=' + oldname
-    with open(LOG_PATH,'a+') as logfile:
-        logfile.write('fetching old metadata %s' % request_str)
     r = requests.get(request_str)
     doc_dict = r.json()['doc']
-    with open(LOG_PATH,'a+') as logfile:
-        logfile.write('metadata dictionary %s' % doc_dict)
     for field in ('_version_', 'timestamp'):
        if field in doc_dict:
           doc_dict.pop(field)
@@ -90,12 +86,8 @@ def renameFile(oldname, newname):
         owner_val = doc_dict['owner'][0]
         doc_dict['owner'] = owner_val
          
-    with open(LOG_PATH,'a+') as logfile:
-        logfile.write('deleting old file %s' % oldname)
     deleteFile(oldname)
     newFile(doc_dict)
-    with open(LOG_PATH,'a+') as logfile:
-        logfile.write('registered new file %s' % doc_dict['id'])
 
 def __add_element(doc, fieldname, value, subname=None):
     
@@ -130,8 +122,6 @@ def __post_request(xml_byte_string):
     r = requests.post(SOLR_CORE_URL + "/update", data=xml_byte_string, headers=headers, params=params) 
 
     # debug: remove me
-    with open("/tmp/messages.txt","a+") as logfile:
-        logfile.write(r.text)
 
     # throw an error if indexing was unsuccessful
     r.raise_for_status()
