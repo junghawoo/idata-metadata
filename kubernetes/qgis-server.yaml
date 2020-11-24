@@ -1,0 +1,65 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qgis-server-deployment
+  labels:
+    name: qgis-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qgis
+  template:
+    metadata:
+      labels:
+        app: qgis
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: type
+                operator: NotIn
+                values:
+                - master
+      containers:
+        - name: qgis-server
+          image: kartoza/qgis-server:LTR
+          ports:
+          - containerPort: 80
+          volumeMounts:
+            - mountPath: /srv/idata
+              name: idata
+          env:
+            - name: QGIS_DEBUG
+              value: "1"
+            - name: QGIS_SERVER_LOG_LEVEL
+              value: "0"
+            - name: QGIS_SERVER_LOG_FILE
+              value: "/tmp/qgis-000.log"
+            - name: QGIS_LOG_FILE
+              value: "/tmp/qgis.log"
+            - name: QGIS_PROJECT_FILE
+              value: ""
+      volumes:
+        - name: idata
+          persistentVolumeClaim:
+            claimName: worker-pv-claim
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qgis-server
+  namespace: default
+  labels:
+    name: qgis-server
+spec:
+  clusterIP: None
+  ports:
+    - name: qgis-server
+      port: 80
+      targetPort: 80
+  selector:
+    app: qgis
