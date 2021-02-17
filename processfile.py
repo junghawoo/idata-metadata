@@ -17,7 +17,16 @@ RMQ_PASS   = str(os.getenv('RMQ_PASS',"rabbitmq"))
 RMQ_EXCHANGE = str(os.getenv('RMQ_EXCHANGE',"rabbitmq"))
 RMQ_QUEUE  = str(os.getenv('RMQ_QUEUE',"geoedf-all"))
 
-LOG_PATH   = '/tmp/messages.txt'
+# log file with the complete message when debugging
+DBG_PATH = '/tmp/debug.txt'
+
+# listing of all processed files
+LOG_PATH = '/tmp/processed.txt'
+
+# setting to true will drop all processing, simply acknowledge 
+# messages and write them to debug file
+# logfile will always be written to
+DEBUG = False
 
 UNSPEC_KEY = 'unknown'
 RASTER_KEY = 'raster'
@@ -46,6 +55,13 @@ def callback(ch, method, properties, body):
         # string to json
         data = json.loads(body)
         # print for debug
+        if DEBUG:
+            with open(DBG_PATH,'a+') as dbgfile:
+                dbgfile.write("%s\n" % body)
+
+            ch.basic_ack(delivery_tag=method.delivery_tag)
+
+            return
 
         # determine if message is from CMS or AuditBeat
         cms_file = False
@@ -59,10 +75,10 @@ def callback(ch, method, properties, body):
             paths[int(item['item'])] = item['name']
 
         if data['action'] == 'rename' or data['action'] == 'renamed':
-            with open(LOG_PATH,'a+') as logfile:
-                logfile.write('action: rename...\n')
             source = os.path.join(paths[0], paths[2])
             destination = os.path.join(paths[1], paths[3])
+            with open(LOG_PATH,'a+') as logfile:
+                logfile.write('action: rename...%s to %s' % (source,destination))
             # only proceed if destination still exists as a file
             if os.path.isfile(destination):
                 try:
@@ -79,6 +95,8 @@ def callback(ch, method, properties, body):
                 filename = os.path.normpath(os.path.join(data['cwd'],paths[0]))
             else:
                 filename = os.path.normpath(paths[1])
+            with open(LOG_PATH,'a+') as logfile:
+                logfile.write('action: open file...%s\n' % filename)
             # if this is no longer a valid file, skip
             # possibly out of date message that was requeued
             if os.path.isfile(filename):
@@ -89,7 +107,7 @@ def callback(ch, method, properties, body):
                 if fileext in raster.extensions:
                     metadata = raster.getMetadata(filename) 
                     # register file for preview
-                    preview.registerlayer.update_qgs(filename)
+                    #preview.registerlayer.update_qgs(filename)
                 elif fileext in vector.extensions:
                     # if this is a shapefile and not all supporting files present,
                     # then requeue the message to wait until all files available
@@ -97,7 +115,7 @@ def callback(ch, method, properties, body):
                         if vector.shapefileComplete(filename):
                             metadata = vector.getMetadata(filename)
                             # register file for preview
-                            preview.registerlayer.update_qgs(filename)
+                            #preview.registerlayer.update_qgs(filename)
                         else:
                             # requeue message
                             requeued = True
@@ -121,6 +139,8 @@ def callback(ch, method, properties, body):
                 filename = os.path.normpath(os.path.join(paths[0],paths[1]))
             else:
                 filename = os.path.normpath(path[1])
+            with open(LOG_PATH,'a+') as logfile:
+                logfile.write('action: delete...%s' % filename)
             # ensure file still does not exist
             if not os.path.isfile(filename):
                 try:
@@ -137,6 +157,8 @@ def callback(ch, method, properties, body):
     # some unexpected error occurred
     # no choice but to ack this message and move on
     except:
+        with open(LOG_PATH,'a+') as logfile:
+            logfile.write('unexpected error processing message: %s' % body.decode())
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
 if __name__ == "__main__":
