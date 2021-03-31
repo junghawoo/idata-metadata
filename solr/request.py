@@ -60,6 +60,10 @@ def renameFile(oldname, newname):
     request_str = SOLR_CORE_URL + '/get?id=' + oldname
     r = requests.get(request_str)
     doc_dict = r.json()['doc']
+    # if old metadata not found, just return
+    # we need a better solution, for e.g. to maybe treat this as a new file
+    if doc_dict is None:
+        return -1
     for field in ('_version_', 'timestamp'):
        if field in doc_dict:
           doc_dict.pop(field)
@@ -88,6 +92,8 @@ def renameFile(oldname, newname):
          
     deleteFile(oldname)
     newFile(doc_dict)
+
+    return 0
 
 def __add_element(doc, fieldname, value, subname=None):
     

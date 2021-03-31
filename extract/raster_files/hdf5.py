@@ -1,7 +1,6 @@
 from osgeo import ogr, osr, gdal
 import sys
 import pyproj
-import osr
 import numpy as np
 import re
 import h5py

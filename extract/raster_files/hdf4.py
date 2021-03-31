@@ -3,7 +3,6 @@ from osgeo import ogr, osr, gdal
 import sys
 from pyproj import Proj, transform
 import pyproj
-import osr
 import numpy as np
 import re
 

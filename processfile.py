@@ -4,6 +4,7 @@
 from __future__ import print_function
 import sys, os, time
 import json
+from json.decoder import JSONDecodeError
 import pika
 import sys, os
 from extract import raster, vector, common
@@ -47,6 +48,8 @@ def requeue_message(ch, body):
 def callback(ch, method, properties, body):
     '''React to message on queue'''
 
+    CMS_EVENT = True
+    working_dir = ''
     requeued = False
 
     try:
@@ -63,38 +66,72 @@ def callback(ch, method, properties, body):
 
             return
 
-        # determine if message is from CMS or AuditBeat
-        cms_file = False
-
-        if 'actor' in data:
-            cms_file = True
-
         # index by item number
         paths = {}
         for item in data['paths']: 
             paths[int(item['item'])] = item['name']
 
+        # we process paths differently for CMS versus tool session events
+        # tool session events contain "working-directory", while CMS events
+        # have the "cwd" field; this is used to distinguish between the two
+        # we use the parent in the case of CMS, and completely ignore it in 
+        # the case of tool sessions to account for relative paths
+
+        if 'process' in data:
+           if 'working_directory' in data['process']:
+               CMS_EVENT = False
+               working_dir = data['process']['working_directory']
+
         if data['action'] == 'rename' or data['action'] == 'renamed':
-            source = os.path.join(paths[0], paths[2])
-            destination = os.path.join(paths[1], paths[3])
+            if CMS_EVENT:
+                source = os.path.join(paths[0], paths[2])
+                destination = os.path.join(paths[1], paths[3])
+            else: # tool session event, so use working dir
+                source = os.path.normpath(os.path.join(working_dir, paths[2]))
+                destination = os.path.normpath(os.path.join(working_dir, paths[3]))
+                
             with open(LOG_PATH,'a+') as logfile:
-                logfile.write('action: rename...%s to %s' % (source,destination))
+                logfile.write('action: rename...%s to %s\n' % (source,destination))
             # only proceed if destination still exists as a file
             if os.path.isfile(destination):
                 try:
-                    solr.request.renameFile(source, destination)
+                    retval = solr.request.renameFile(source, destination)
+                    # check return value; if -1 indicates orig. file not present in index
+                    # insert a new file message to get the renamed file indexed
+                    if retval == -1:
+                        data['action'] = 'opened-file'
+                        if CMS_EVENT:   #replace the cwd with the parent of the destination
+                            data['cwd'] = paths[1]
+                            path = dict()
+                            path['name'] = paths[3]
+                            path['item'] = '0'
+                            data['paths'] = [path]
+                        else:
+                            parent = dict()
+                            parent['name'] = paths[1]
+                            parent['item'] = '0'
+                            child = dict()
+                            child['name'] = paths[3]
+                            child['item'] = '1'
+                            data['paths'] = [parent,child]
+                        body = json.dumps(data)
+                        body = body.encode()
+                        requeued = True
+                        requeue_message(ch,body)
+                        with open(LOG_PATH,'a+') as logfile:
+                            logfile.write('renamed file not present in index; requeuing as new file event\n')
                 except:
                     # exception occurred when sending Solr request
                     # requeue for trying later
                     requeued = True
                     requeue_message(ch,body)
                     with open(LOG_PATH,'a+') as logfile:
-                        logfile.write('requeued message')
+                        logfile.write('requeued message\n')
         elif data['action'] == 'opened-file':
-            if cms_file:
+            if CMS_EVENT:
                 filename = os.path.normpath(os.path.join(data['cwd'],paths[0]))
             else:
-                filename = os.path.normpath(paths[1])
+                filename = os.path.normpath(os.path.join(working_dir,paths[1]))
             with open(LOG_PATH,'a+') as logfile:
                 logfile.write('action: open file...%s\n' % filename)
             # if this is no longer a valid file, skip
@@ -126,21 +163,21 @@ def callback(ch, method, properties, body):
                 try:
                     if not requeued:
                         # add the actor if known
-                        if cms_file:
+                        if 'actor' in data:
                             metadata['actor'] = data['actor']
                         solr.request.newFile(metadata)
                 except:
                     requeued = True
                     requeue_message(ch,body)
                     with open(LOG_PATH,'a+') as logfile:
-                        logfile.write('requeued message')
+                        logfile.write('requeued message\n')
         elif data['action'] == 'deleted':
-            if cms_file:
+            if CMS_EVENT:
                 filename = os.path.normpath(os.path.join(paths[0],paths[1]))
             else:
-                filename = os.path.normpath(path[1])
+                filename = os.path.normpath(os.path.join(working_dir,paths[1]))
             with open(LOG_PATH,'a+') as logfile:
-                logfile.write('action: delete...%s' % filename)
+                logfile.write('action: delete...%s\n' % filename)
             # ensure file still does not exist
             if not os.path.isfile(filename):
                 try:
@@ -149,16 +186,21 @@ def callback(ch, method, properties, body):
                     requeued = True
                     requeue_message(ch,body)
                     with open(LOG_PATH,'a+') as logfile:
-                        logfile.write("requeued message")
+                        logfile.write("requeued message\n")
 
         # acknowledge this message
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
     # some unexpected error occurred
     # no choice but to ack this message and move on
+    except JSONDecodeError: 
+        with open(LOG_PATH,'a+') as logfile:
+            logfile.write('%s is not a properly formatted JSON message, probably a test mesage\n' % body)
+        ch.basic_ack(delivery_tag=method.delivery_tag)
     except:
         with open(LOG_PATH,'a+') as logfile:
-            logfile.write('unexpected error processing message: %s' % body.decode())
+            logfile.write('unexpected error processing message: %s\n' % body)
+            logfile.write('Exception %s\n' % sys.exc_info()[0])
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
 if __name__ == "__main__":
