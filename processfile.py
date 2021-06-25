@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Pop msg off queue, extract metadata, send to Solr 
+# Pop msg off queue, extract metadata, send to Solr
 
 from __future__ import print_function
 import sys, os, time
@@ -24,7 +24,10 @@ DBG_PATH = '/tmp/debug.txt'
 # listing of all processed files
 LOG_PATH = '/tmp/processed.txt'
 
-# setting to true will drop all processing, simply acknowledge 
+# listing of files that have failed despite 10 requeues
+FAIL_PATH = '/tmp/failed.txt'
+
+# setting to true will drop all processing, simply acknowledge
 # messages and write them to debug file
 # logfile will always be written to
 DEBUG = False
@@ -33,17 +36,36 @@ UNSPEC_KEY = 'unknown'
 RASTER_KEY = 'raster'
 SHAPE_KEY  = 'shape'
 
+# requeue only if we haven't exceeded requeue count
+# also increment requeue count each time
 def requeue_message(ch, body):
     '''Requeue the same message for re-processing'''
+    body = body.decode()
+    data = json.loads(body)
+    if 'requeue_count' in data:
+        requeue_count = data['requeue_count']
+        if requeue_count == 10: #don't requeue any more
+            with open(FAIL_FILE,'a+') as failfile:
+                failfile.write('Requeue failed: %s\n' % body)
+            return
+        else:
+            requeue_count = requeue_count + 1
+            data['requeue_count'] = requeue_count
+    else:
+        data['requeue_count'] = 1
+
+    body = json.dumps(data)
+    body = body.encode()
+
     ch.basic_publish(
             exchange = RMQ_EXCHANGE,
             routing_key = 'geoedf',
             body = body)
 
-# if indexing to Solr fails, the message will be requeued 
-# so, whenever a message is processed, we need to make sure 
+# if indexing to Solr fails, the message will be requeued
+# so, whenever a message is processed, we need to make sure
 # the status of the filesystem is still the same
-# for e.g. if processing a rename, ensure there is still a file 
+# for e.g. if processing a rename, ensure there is still a file
 # with this new name
 def callback(ch, method, properties, body):
     '''React to message on queue'''
@@ -66,15 +88,23 @@ def callback(ch, method, properties, body):
 
             return
 
+        # first determine the hub this message originates from
+        # this is useful in constructing the proxy URL for feature queries
+        # but may also be used to implement different behaviors for prod vs dev
+        if 'hub' in data:
+            hub = data['hub']
+        else:
+            hub = 'dev.mygeohub.org'
+
         # index by item number
         paths = {}
-        for item in data['paths']: 
+        for item in data['paths']:
             paths[int(item['item'])] = item['name']
 
         # we process paths differently for CMS versus tool session events
         # tool session events contain "working-directory", while CMS events
         # have the "cwd" field; this is used to distinguish between the two
-        # we use the parent in the case of CMS, and completely ignore it in 
+        # we use the parent in the case of CMS, and completely ignore it in
         # the case of tool sessions to account for relative paths
 
         if 'process' in data:
@@ -89,7 +119,7 @@ def callback(ch, method, properties, body):
             else: # tool session event, so use working dir
                 source = os.path.normpath(os.path.join(working_dir, paths[2]))
                 destination = os.path.normpath(os.path.join(working_dir, paths[3]))
-                
+
             with open(LOG_PATH,'a+') as logfile:
                 logfile.write('action: rename...%s to %s\n' % (source,destination))
             # only proceed if destination still exists as a file
@@ -127,6 +157,13 @@ def callback(ch, method, properties, body):
                     requeue_message(ch,body)
                     with open(LOG_PATH,'a+') as logfile:
                         logfile.write('requeued message\n')
+            else: # file not found, but mount could be down, so requeue
+                if not os.path.exists(os.path.dirname(destination)):
+                    #directory cannot be found, likely mount is down, so requeue and wait
+                    requeued = True
+                    requeue_message(ch,body)
+                    with open(LOG_PATH,'a+') as logfile:
+                        logfile.write('requeued message\n')
         elif data['action'] == 'opened-file':
             if CMS_EVENT:
                 filename = os.path.normpath(os.path.join(data['cwd'],paths[0]))
@@ -137,26 +174,41 @@ def callback(ch, method, properties, body):
             # if this is no longer a valid file, skip
             # possibly out of date message that was requeued
             if os.path.isfile(filename):
+                # some initialization
+                shpfile_metadata = None
                 fileext = os.path.splitext(os.path.split(filename)[1])[1]
                 # extract metadata based on filetype
                 # assume that metadata extractor will not raise an exception
                 # a basic dictionary will be returned in the worst case
                 if fileext in raster.extensions:
-                    metadata = raster.getMetadata(filename) 
+                    metadata = raster.getMetadata(filename)
                     # register file for preview
-                    #preview.registerlayer.update_qgs(filename)
+                    preview.registerlayer.update_qgs(filename,hub,mode=1)
                 elif fileext in vector.extensions:
-                    # if this is a shapefile and not all supporting files present,
-                    # then requeue the message to wait until all files available
-                    if fileext == '.shp':
+                    # if this is a shapefile component and not all supporting files present,
+                    # then skip the metadata and preview processing of the shapefile
+                    if fileext in vector.shapefile_components:
                         if vector.shapefileComplete(filename):
-                            metadata = vector.getMetadata(filename)
-                            # register file for preview
-                            #preview.registerlayer.update_qgs(filename)
+                            if fileext == '.shp':
+                                metadata = vector.getMetadata(filename)
+                                # register file for preview
+                                preview.registerlayer.update_qgs(filename,hub,mode=1)
+                            else: #not the .shp file, but still completes the puzzle
+                                # first get the metadata for this file
+                                metadata = common.basicData(filename)
+                                # we update filename to reference the shapefile for the next steps
+                                filename_noext = os.path.splitext(filename)[0]
+                                shp_filename = '%s.shp' % filename_noext
+                                shpfile_metadata = vector.getMetadata(shp_filename)
+                                # register file for preview
+                                preview.registerlayer.update_qgs(shp_filename,hub,mode=1)
                         else:
-                            # requeue message
-                            requeued = True
-                            requeue_message(ch,body)
+                            if fileext == '.shp':
+                                # shapefile but not complete, we skip for now
+                                ch.basic_ack(delivery_tag=method.delivery_tag)
+                                return 
+                            else:
+                                metadata = common.basicData(filename)
                 else:
                     metadata = common.basicData(filename)
                 # index to Solr, unless requeuing
@@ -166,11 +218,19 @@ def callback(ch, method, properties, body):
                         if 'actor' in data:
                             metadata['actor'] = data['actor']
                         solr.request.newFile(metadata)
+                        # sometimes there is shapefile metadata on completion
+                        if shpfile_metadata is not None:
+                            if 'actor' in data:
+                                shpfile_metadata['actor'] = data['actor']
+                            solr.request.newFile(shpfile_metadata)
                 except:
                     requeued = True
                     requeue_message(ch,body)
-                    with open(LOG_PATH,'a+') as logfile:
-                        logfile.write('requeued message\n')
+            else: # file not found, but mount could be down, so requeue
+                if not os.path.exists(os.path.dirname(filename)):
+                    #directory cannot be found, likely mount is down, so requeue and wait
+                    requeued = True
+                    requeue_message(ch,body)
         elif data['action'] == 'deleted':
             if CMS_EVENT:
                 filename = os.path.normpath(os.path.join(paths[0],paths[1]))
@@ -180,6 +240,9 @@ def callback(ch, method, properties, body):
                 logfile.write('action: delete...%s\n' % filename)
             # ensure file still does not exist
             if not os.path.isfile(filename):
+                fileext = os.path.splitext(os.path.split(filename)[1])[1]
+                if fileext in raster.extensions or fileext in vector.extensions:
+                    preview.registerlayer.update_qgs(filename,hub,mode=-1)
                 try:
                     solr.request.deleteFile(filename)
                 except:
@@ -193,7 +256,7 @@ def callback(ch, method, properties, body):
 
     # some unexpected error occurred
     # no choice but to ack this message and move on
-    except JSONDecodeError: 
+    except JSONDecodeError:
         with open(LOG_PATH,'a+') as logfile:
             logfile.write('%s is not a properly formatted JSON message, probably a test mesage\n' % body)
         ch.basic_ack(delivery_tag=method.delivery_tag)

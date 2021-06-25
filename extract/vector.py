@@ -7,7 +7,8 @@ from .vector_files import kml
 from .vector_files import shp
 import os.path
 
-extensions = ['.gml', '.kml', '.shp']
+extensions = ['.gml', '.kml', '.shp', '.dbf', '.prj', '.shx']
+shapefile_components = ['.shp', '.dbf', '.prj', '.shx']
 
 #------------ for vector file------------------#
 
@@ -30,8 +31,12 @@ def getMetadata(filepath):
          driver = ogr.GetDriverByName('KML')
      elif (ext == '.shp'):
          driver = ogr.GetDriverByName('ESRI Shapefile')
-    
+
+     with open('/tmp/messages.txt','a+') as logfile:
+         logfile.write('\n get shp metadata %s' % filepath)    
      datasource = driver.Open(filepath)
+     with open('/tmp/messages.txt','a+') as logfile:
+         logfile.write('\n opened shapefile')
      data = {}
 
      # get extent

@@ -12,8 +12,8 @@ def getMetadata(filepath):
     data['xsize'] = datasource.RasterXSize
     data['ysize'] = datasource.RasterYSize
     ulx, uly, llx, lly, lrx, lry, urx, ury = getCoverage(datasource)
-    latitudes = [ulx, llx, lrx, urx]
-    longitudes = [uly, lly, lry, ury] 
+    longitudes = [ulx, llx, lrx, urx]
+    latitudes = [uly, lly, lry, ury] 
     data['northlimit'] = uly
     data['southlimit'] = lly
     data['eastlimit'] = urx

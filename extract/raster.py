@@ -74,8 +74,8 @@ def getMetadata(filepath):
      except:
          with open(LOG_PATH,'a+') as logfile:
              logfile.write('could not get raster projection, assuming WGS84')
-         latitudes = [ulx, llx, lrx, urx]
-         longitudes = [uly, lly, lry, ury] 
+         longitudes = [ulx, llx, lrx, urx]
+         latitudes = [uly, lly, lry, ury] 
 
      data['northlimit'] = uly
      data['southlimit'] = lly

@@ -6,7 +6,7 @@ USER root
 
 RUN apt-get update && apt-get -y install qgis qgis-plugin-grass npm git
 
-RUN conda create -n geoedf -c conda-forge netcdf4 requests pika gdal shapely pyproj pyhdf h5py hdfeos2 qgis pyqt=5
+RUN conda create -n geoedf -c conda-forge netcdf4 requests pika gdal shapely pyproj pyhdf h5py hdfeos2 qgis pyqt=5 oslo.concurrency
 
 ENV LD_LIBRARY_PATH=/usr/local/lib:/usr/lib:/usr/lib/qgis/plugins/lib:$LD_LIBRARY_PATH
 
