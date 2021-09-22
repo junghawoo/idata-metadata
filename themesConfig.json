@@ -3,7 +3,7 @@
     "items": [
       {
         "url": "https://QGIS_SERVER?map=PROJ_QGS_FILE",
-        "featureInfoUrl": "https://HUB/idata?task=featinfoproxy&map=PROJ_QGS_FILE",
+        "featureInfoUrl": "https://HUB/idataproxy?task=featinfo&map=PROJ_QGS_FILE",
         "attribution": "MyGeoHub preview",
         "attributionUrl": "https://QGIS_SERVER?map=PROJ_QGS_FILE",
         "scales": [102400000, 51200000, 25600000, 1280000, 320000, 160000, 80000, 40000, 20000, 10000, 8000, 6000, 4000, 2000, 1000, 500, 250, 100],
