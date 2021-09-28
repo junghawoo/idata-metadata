@@ -167,7 +167,6 @@ def update_qgs(geospatial_filename,hub,mode=1):
                 style_manager.addStyle("mystyle", style)
 
                 project.addMapLayer(layer)
-                add_to_wfs_layers(layer)
                 # set mapcanvas's crs to layer's crs
                 set_map_canvas(layer)
 
@@ -181,6 +180,7 @@ def update_qgs(geospatial_filename,hub,mode=1):
                         # set layer's Coordinate Reference system to epsg 4326
                         layer.setCrs(QgsCoordinateReferenceSystem.fromEpsgId(4326))
                     project.addMapLayer(layer)
+                    add_to_wfs_layers(layer)
                     # set mapcanvas's crs to layer's crs
                     set_map_canvas(layer)
 
