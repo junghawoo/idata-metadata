@@ -48,13 +48,14 @@ PATH = "/usr"
 @lockutils.synchronized('geoedf_preview', fair=True, external=True)
 def update_qgs(geospatial_filename,hub,mode=1):
 
+    with open('/tmp/messages.txt','a+') as logfile:
+        logfile.write('\n preview: %s' % geospatial_filename)
+
+    # figure out the project directory
+    project_dir = os.path.split(geospatial_filename)[0]
+
     try:
 
-        with open('/tmp/messages.txt','a+') as logfile:
-            logfile.write('\n preview: %s' % geospatial_filename)
-
-        # figure out the project directory
-        project_dir = os.path.split(geospatial_filename)[0]
         # find the current QGS project file in the directory
         # rename it with the latest timestamp
         project_qgs_filename = None #default filename
@@ -167,7 +168,6 @@ def update_qgs(geospatial_filename,hub,mode=1):
                 style_manager.addStyle("mystyle", style)
 
                 project.addMapLayer(layer)
-                add_to_wfs_layers(layer)
                 # set mapcanvas's crs to layer's crs
                 set_map_canvas(layer)
 
@@ -180,6 +180,7 @@ def update_qgs(geospatial_filename,hub,mode=1):
                     if layer.crs() is None:
                         # set layer's Coordinate Reference system to epsg 4326
                         layer.setCrs(QgsCoordinateReferenceSystem.fromEpsgId(4326))
+                    add_to_wfs_layers(layer)
                     project.addMapLayer(layer)
                     # set mapcanvas's crs to layer's crs
                     set_map_canvas(layer)
@@ -276,10 +277,9 @@ def update_qgs(geospatial_filename,hub,mode=1):
             if os.path.exists('/app/qwc2-demo-app/themes.json'):
                 with open('/tmp/messages.txt','a+') as logfile:
                     logfile.write('yarn run succeeded, themes.json created')
+                # copy the themes.json file from /tmp to the project directory
+                copyfile('/app/qwc2-demo-app/themes.json','%s/themes.json' % project_dir)
                 break
-
-        # copy the themes.json file from /tmp to the project directory
-        copyfile('/app/qwc2-demo-app/themes.json','%s/themes.json' % project_dir)
 
         layer = None
 
@@ -295,9 +295,16 @@ def update_qgs(geospatial_filename,hub,mode=1):
         add_legends(new_projectfile_path)
 
     except Exception as exc:
-        with open('/tmp/messages.txt','a+') as logfile:
-            logfile.write('exception %s' % exc)
-        raise exc
+        # delete the qgs and themes file since we cannot guarantee consistent preview
+        for file in os.listdir(project_dir):
+            if file.endswith('.qgs'):
+                qgs_file = '%s/%s' % (project_dir,file)
+                os.remove(qgs_file)
+        if os.path.exists('%s/themes.json' % project_dir):
+            os.remove('%s/themes.json' % project_dir)
+        # create a preview error file and write out exception
+        with open('%s/preview.err' % project_dir,'a+') as errfile:
+            errfile.write('Exception when previewing %s: %s' % (geospatial_filename,exc))
 
 #set default CRS to 4326
 def set_project_crs():
