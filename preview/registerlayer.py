@@ -182,6 +182,7 @@ def update_qgs(geospatial_filename,hub,mode=1):
                         layer.setCrs(QgsCoordinateReferenceSystem.fromEpsgId(4326))
                     add_to_wfs_layers(layer)
                     project.addMapLayer(layer)
+                    add_to_wfs_layers(layer)
                     # set mapcanvas's crs to layer's crs
                     set_map_canvas(layer)
 
