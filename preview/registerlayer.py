@@ -275,11 +275,12 @@ def update_qgs(geospatial_filename,hub,mode=1):
                 logfile.write('\nretrying yarn run %d' % retry)
             subprocess.run(['yarn','run','themesconfig'],cwd='/app/qwc2-demo-app')
             # if success, break out
-            if os.path.exists('/app/qwc2-demo-app/themes.json'):
+	    # yarn run themsconfig now creates themes.json under static (since Oct 2021)
+            if os.path.exists('/app/qwc2-demo-app/static/themes.json'):
                 with open('/tmp/messages.txt','a+') as logfile:
                     logfile.write('yarn run succeeded, themes.json created')
                 # copy the themes.json file from /tmp to the project directory
-                copyfile('/app/qwc2-demo-app/themes.json','%s/themes.json' % project_dir)
+                copyfile('/app/qwc2-demo-app/static/themes.json','%s/themes.json' % project_dir)
                 break
 
         layer = None
