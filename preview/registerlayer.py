@@ -132,11 +132,18 @@ def update_qgs(geospatial_filename,hub,mode=1):
             filename_without_extension = os.path.splitext(os.path.split(geospatial_filename)[1])[0]
             len_to_match = len(filename_without_extension)
 
+            # We compare filenames using "filename.filetype" format.
+            # Previously, filename comparison incorrectly match existing layername if the new layer name is
+            # a prefix of an existing layer. We compare strings with full length.
+            filename_without_extension, ext = os.path.splitext(os.path.split(geospatial_filename)[1])
+            layername_to_match =‘{0}_{1}‘.format(filename_without_extension, ext.replace(‘.’, ‘’).upper())
+            len_to_match = len(layername_to_match)
+
             for id, layer in project.mapLayers().items():
                 with open('/tmp/messages.txt','a+') as logfile:
                     logfile.write('\n old layer :%s' % layer.name())
                 # Check if this layer has the geospatial filename set aside file extension
-                if layer.name()[0:len_to_match] == filename_without_extension :
+                if layer.name()[0:len_to_match] == layername_to_match :
                     # Match found
                     with open('/tmp/messages.txt','a+') as logfile:
                         logfile.write('\n layer already found in project: %s' % filename_without_extension)
@@ -233,8 +240,8 @@ def update_qgs(geospatial_filename,hub,mode=1):
             os.remove(projectfile_path)
 
         # also delete the themes.json so that we can check when themesConfig has succeeded
-        if os.path.exists('/app/qwc2-demo-app/themes.json'):
-            os.remove('/app/qwc2-demo-app/themes.json')
+        if os.path.exists('/app/qwc2-demo-app/static/themes.json'):
+            os.remove('/app/qwc2-demo-app/static/themes.json')
 
         if os.path.exists('/app/qwc2-demo-app/themesConfig.json'):
             os.remove('/app/qwc2-demo-app/themesConfig.json')
