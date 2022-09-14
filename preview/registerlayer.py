@@ -136,7 +136,7 @@ def update_qgs(geospatial_filename,hub,mode=1):
             # Previously, filename comparison incorrectly match existing layername if the new layer name is
             # a prefix of an existing layer. We compare strings with full length.
             filename_without_extension, ext = os.path.splitext(os.path.split(geospatial_filename)[1])
-            layername_to_match =‘{0}_{1}‘.format(filename_without_extension, ext.replace(‘.’, ‘’).upper())
+            layername_to_match ='{0}_{1}'.format(filename_without_extension, ext.replace('.', '').upper())
             len_to_match = len(layername_to_match)
 
             for id, layer in project.mapLayers().items():
